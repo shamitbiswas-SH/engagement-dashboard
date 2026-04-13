@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simplify Group — Raw Engagements Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@300;400;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--blue:#105299;--gold:#D6B73E;--black:#221F20;--teal:#009277;--orange:#F58532;
+--blue-light:#BBECFF;--teal-light:#B7EDD9;--green:#55B965;--pink:#C968A7;
+--purple:#954892;--neutral:#FFF4CF;--gray:#EAEAEB;--white:#FFFFFF;
+--font-heading:'Roboto Slab',serif;--font-body:'Source Sans 3',sans-serif;
+}
+body{font-family:var(--font-body);background:#f4f6f8;color:var(--black);line-height:1.5}
+.loading{display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px}
+.loading h2{font-family:var(--font-heading);color:var(--blue)}
+.spinner{width:40px;height:40px;border:4px solid var(--gray);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+header{background:linear-gradient(135deg,#0a3d75 0%,var(--blue) 60%,var(--teal) 100%);color:white;padding:32px 40px 28px;position:relative;overflow:hidden}
+header::after{content:'';position:absolute;top:-40%;right:-8%;width:350px;height:350px;background:radial-gradient(circle,rgba(0,146,119,0.15) 0%,transparent 70%);pointer-events:none}
+header h1{font-family:var(--font-heading);font-size:26px;font-weight:700}
+header p{opacity:0.75;font-size:14px;margin-top:4px}
+.header-row{display:flex;justify-content:space-between;align-items:flex-end}
+.scan-badge{background:rgba(255,255,255,0.12);padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600}
+.nav-link{color:rgba(255,255,255,0.8);text-decoration:none;font-size:13px;border:1px solid rgba(255,255,255,0.3);padding:5px 14px;border-radius:16px;transition:all .15s}
+.nav-link:hover{background:rgba(255,255,255,0.15);color:white}
+
+.container{max-width:1200px;margin:0 auto;padding:24px 20px 60px}
+
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px}
+.kpi{background:white;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);border-top:3px solid var(--blue);transition:transform .15s}
+.kpi:hover{transform:translateY(-2px)}
+.kpi:nth-child(2){border-top-color:var(--teal)}
+.kpi:nth-child(3){border-top-color:var(--orange)}
+.kpi:nth-child(4){border-top-color:var(--green)}
+.kpi:nth-child(5){border-top-color:var(--purple)}
+.kpi-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#888;font-weight:600}
+.kpi-value{font-family:var(--font-heading);font-size:32px;font-weight:700;color:var(--black);margin:4px 0 2px}
+.kpi-sub{font-size:12px;color:#999}
+
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+.card{background:white;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+.card h3{font-family:var(--font-heading);font-size:15px;color:var(--blue);margin-bottom:16px;font-weight:700}
+canvas{max-height:230px}
+
+.filter-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filter-bar label{font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-right:4px}
+.filter-group{display:flex;gap:6px;align-items:center}
+.fbtn{padding:5px 14px;border:1.5px solid var(--gray);border-radius:16px;background:white;font-family:var(--font-body);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--black)}
+.fbtn:hover{border-color:var(--blue);color:var(--blue)}
+.fbtn.active{background:var(--blue);color:white;border-color:var(--blue)}
+.fbtn.active-teal{background:var(--teal);color:white;border-color:var(--teal)}
+.fbtn.active-orange{background:var(--orange);color:white;border-color:var(--orange)}
+.search-box{padding:6px 14px;border:1.5px solid var(--gray);border-radius:16px;font-family:var(--font-body);font-size:13px;width:220px;outline:none;transition:border .15s}
+.search-box:focus{border-color:var(--blue)}
+
+.table-wrap{overflow-x:auto;max-height:600px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:var(--blue);color:white;padding:9px 12px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;z-index:2}
+thead th:first-child{border-radius:8px 0 0 0}
+thead th:last-child{border-radius:0 8px 0 0}
+tbody tr{border-bottom:1px solid #f0f0f0;transition:background .1s}
+tbody tr:hover{background:#f8fbff}
+tbody td{padding:8px 12px}
+.name-col{font-weight:600;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.headline-col{color:#888;font-size:12px;max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.type-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700;letter-spacing:.3px}
+.type-like{background:#e8f4ff;color:var(--blue)}
+.type-comment{background:#e8fff4;color:var(--teal)}
+.type-share{background:var(--neutral);color:#8a6d00}
+.page-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600}
+.page-shc{background:#e8f4ff;color:var(--blue)}
+.page-sx{background:#f5e8f4;color:var(--purple)}
+.page-sv{background:#e8fff4;color:var(--teal)}
+.emp-yes{color:var(--green);font-weight:700;font-size:12px}
+.emp-no{color:#ccc;font-size:12px}
+.row-count{font-size:13px;color:#888;margin-bottom:12px}
+
+footer{text-align:center;padding:20px;font-size:12px;color:#aaa}
+
+.error-msg{background:#fff3f3;border:1px solid #ffcccc;border-radius:10px;padding:24px;text-align:center;margin:40px auto;max-width:600px}
+.error-msg h3{color:#c0392b;margin-bottom:8px}
+
+@media(max-width:768px){
+.kpi-row{grid-template-columns:repeat(2,1fr)}
+.chart-row{grid-template-columns:1fr}
+header{padding:20px}
+.search-box{width:100%}
+}
+</style>
+</head>
+<body>
+
+<div id="app" class="loading">
+<div class="spinner"></div>
+<h2>Loading raw engagements...</h2>
+</div>
+
+<script>
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTvtVlu568iZ5JvwZSlkakOX2aM95GB8aLDXUbqsWBIVNKUZigDXmxIGSLjjbSmmQUDGejzxuHY0KPe/pub?gid=0&single=true&output=csv';
+
+const app = document.getElementById('app');
+let ALL_DATA = [];
+
+async function init() {
+  try {
+    const res = await fetch(CSV_URL);
+    const text = await res.text();
+    ALL_DATA = Papa.parse(text, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
+    if (!ALL_DATA.length) throw new Error('Empty');
+    render();
+  } catch(e) {
+    console.error(e);
+    app.innerHTML = `<header><h1>Raw Engagements Dashboard</h1></header><div class="container"><div class="error-msg"><h3>Could not load data</h3><p>${e.message}</p></div></div>`;
+  }
+}
+
+function pageClass(p) {
+  if (!p) return 'page-shc';
+  if (p.includes('SimplifyX')) return 'page-sx';
+  if (p.includes('Ventures')) return 'page-sv';
+  return 'page-shc';
+}
+
+function typeClass(t) {
+  if (t === 'COMMENT') return 'type-comment';
+  if (t === 'SHARE') return 'type-share';
+  return 'type-like';
+}
+
+function render() {
+  const data = ALL_DATA;
+  const totalEng = data.length;
+  const likes = data.filter(r => r.engagement_type === 'LIKE').length;
+  const comments = data.filter(r => r.engagement_type === 'COMMENT').length;
+  const shares = data.filter(r => r.engagement_type === 'SHARE').length;
+  const employees = data.filter(r => String(r.is_employee).toLowerCase() === 'true').length;
+  const external = totalEng - employees;
+  const scanDate = data[0]?.scan_date || 'N/A';
+  const uniquePeople = new Set(data.map(r => r.person_name)).size;
+
+  // Page breakdown
+  const pages = {};
+  data.forEach(r => { const p = r.company_page || 'Unknown'; pages[p] = (pages[p]||0)+1; });
+
+  // Type per page
+  const pageNames = Object.keys(pages).sort();
+  const typePerPage = {};
+  pageNames.forEach(p => { typePerPage[p] = { LIKE: 0, COMMENT: 0, SHARE: 0 }; });
+  data.forEach(r => { const p = r.company_page||'Unknown'; const t = r.engagement_type||'LIKE'; if(typePerPage[p]) typePerPage[p][t]++; });
+
+  // Top posts
+  const postCounts = {};
+  data.forEach(r => {
+    const key = r.post_snippet || r.post_url || 'Unknown';
+    if (!postCounts[key]) postCounts[key] = { snippet: (r.post_snippet||'').substring(0,60), count: 0, page: r.company_page };
+    postCounts[key].count++;
+  });
+  const topPosts = Object.values(postCounts).sort((a,b) => b.count - a.count).slice(0,8);
+
+  app.className = '';
+  app.innerHTML = `
+    <header>
+      <div class="header-row">
+        <div>
+          <h1>Raw Engagements — Simplify Group</h1>
+          <p>Every like, comment, and share across all company pages</p>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <div class="scan-badge">Scan: ${scanDate}</div>
+        </div>
+      </div>
+    </header>
+    <div class="container">
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-label">Total engagements</div><div class="kpi-value">${totalEng.toLocaleString()}</div><div class="kpi-sub">${uniquePeople} unique people</div></div>
+        <div class="kpi"><div class="kpi-label">Likes</div><div class="kpi-value">${likes.toLocaleString()}</div><div class="kpi-sub">${(likes/totalEng*100).toFixed(0)}% of total</div></div>
+        <div class="kpi"><div class="kpi-label">Comments</div><div class="kpi-value">${comments}</div><div class="kpi-sub">3x point value</div></div>
+        <div class="kpi"><div class="kpi-label">Employees</div><div class="kpi-value">${employees}</div><div class="kpi-sub">${(employees/totalEng*100).toFixed(0)}% of engagements</div></div>
+        <div class="kpi"><div class="kpi-label">External</div><div class="kpi-value">${external}</div><div class="kpi-sub">${(external/totalEng*100).toFixed(0)}% of engagements</div></div>
+      </div>
+
+      <div class="chart-row">
+        <div class="card">
+          <h3>Engagements by company page</h3>
+          <canvas id="pageChart"></canvas>
+        </div>
+        <div class="card">
+          <h3>Employee vs external</h3>
+          <canvas id="empChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-row">
+        <div class="card">
+          <h3>Engagement types per page</h3>
+          <canvas id="typeChart"></canvas>
+        </div>
+        <div class="card">
+          <h3>Top posts by engagement</h3>
+          <canvas id="postChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>All engagements</h3>
+        <div class="filter-bar">
+          <div class="filter-group">
+            <label>Page</label>
+            <button class="fbtn active" data-f="page" data-v="all">All</button>
+            ${pageNames.map(p => `<button class="fbtn" data-f="page" data-v="${p}">${p.replace('Simplify ','')}</button>`).join('')}
+          </div>
+          <div class="filter-group">
+            <label>Type</label>
+            <button class="fbtn active-teal" data-f="type" data-v="all">All</button>
+            <button class="fbtn" data-f="type" data-v="LIKE">Likes</button>
+            <button class="fbtn" data-f="type" data-v="COMMENT">Comments</button>
+          </div>
+          <div class="filter-group">
+            <label>Who</label>
+            <button class="fbtn active-orange" data-f="emp" data-v="all">All</button>
+            <button class="fbtn" data-f="emp" data-v="true">Employees</button>
+            <button class="fbtn" data-f="emp" data-v="false">External</button>
+          </div>
+          <input class="search-box" id="searchBox" placeholder="Search by name..." />
+        </div>
+        <div class="row-count" id="rowCount"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Name</th><th>Headline</th><th>Type</th><th>Page</th><th>Employee</th><th>Entity</th><th>Post snippet</th>
+            </tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <footer>Raw Engagements Dashboard — Simplify Group &nbsp;|&nbsp; Auto-refreshes from Google Sheets</footer>`;
+
+  // Page bar chart
+  new Chart(document.getElementById('pageChart'), {
+    type: 'bar',
+    data: {
+      labels: pageNames.map(p => p.replace('Simplify ','')),
+      datasets: [{ data: pageNames.map(p => pages[p]), backgroundColor: ['#105299','#954892','#009277'], borderRadius: 6, borderWidth: 0 }]
+    },
+    options: { responsive:true, indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}},y:{grid:{display:false}}} }
+  });
+
+  // Employee donut
+  new Chart(document.getElementById('empChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Employees','External'],
+      datasets: [{ data: [employees, external], backgroundColor: ['#009277','#EAEAEB'], borderWidth: 0 }]
+    },
+    options: { responsive:true, plugins:{legend:{position:'right',labels:{font:{family:"'Source Sans 3'"},padding:12}}} }
+  });
+
+  // Stacked type per page
+  new Chart(document.getElementById('typeChart'), {
+    type: 'bar',
+    data: {
+      labels: pageNames.map(p => p.replace('Simplify ','')),
+      datasets: [
+        { label:'Likes', data: pageNames.map(p => typePerPage[p].LIKE), backgroundColor:'#4C9CD5', borderRadius:4 },
+        { label:'Comments', data: pageNames.map(p => typePerPage[p].COMMENT), backgroundColor:'#009277', borderRadius:4 },
+        { label:'Shares', data: pageNames.map(p => typePerPage[p].SHARE), backgroundColor:'#D6B73E', borderRadius:4 }
+      ]
+    },
+    options: { responsive:true, scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,grid:{display:false}}}, plugins:{legend:{position:'top',labels:{font:{family:"'Source Sans 3'",size:11}}}} }
+  });
+
+  // Top posts
+  new Chart(document.getElementById('postChart'), {
+    type: 'bar',
+    data: {
+      labels: topPosts.map(p => (p.snippet||'No snippet').substring(0,35)+'...'),
+      datasets: [{ data: topPosts.map(p => p.count), backgroundColor: topPosts.map(p => p.page?.includes('SimplifyX')?'#954892':p.page?.includes('Ventures')?'#009277':'#105299'), borderRadius:6, borderWidth:0 }]
+    },
+    options: { responsive:true, indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}},y:{grid:{display:false},ticks:{font:{size:11}}}} }
+  });
+
+  // Filters
+  const filters = { page:'all', type:'all', emp:'all', search:'' };
+
+  function applyFilters() {
+    let filtered = ALL_DATA;
+    if (filters.page !== 'all') filtered = filtered.filter(r => r.company_page === filters.page);
+    if (filters.type !== 'all') filtered = filtered.filter(r => r.engagement_type === filters.type);
+    if (filters.emp !== 'all') filtered = filtered.filter(r => String(r.is_employee).toLowerCase() === filters.emp);
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      filtered = filtered.filter(r => (r.person_name||'').toLowerCase().includes(q));
+    }
+    document.getElementById('rowCount').textContent = `Showing ${filtered.length} of ${ALL_DATA.length} engagements`;
+    document.getElementById('tbody').innerHTML = filtered.slice(0,200).map(rowHTML).join('');
+  }
+
+  document.querySelector('.filter-bar').addEventListener('click', e => {
+    const btn = e.target.closest('.fbtn');
+    if (!btn) return;
+    const f = btn.dataset.f;
+    const v = btn.dataset.v;
+    filters[f] = v;
+    const activeClass = f === 'type' ? 'active-teal' : f === 'emp' ? 'active-orange' : 'active';
+    btn.parentElement.querySelectorAll('.fbtn').forEach(b => { b.className = 'fbtn'; });
+    btn.classList.add(activeClass);
+    applyFilters();
+  });
+
+  document.getElementById('searchBox').addEventListener('input', e => {
+    filters.search = e.target.value;
+    applyFilters();
+  });
+
+  applyFilters();
+}
+
+function rowHTML(r) {
+  const isEmp = String(r.is_employee).toLowerCase() === 'true';
+  return `<tr>
+    <td class="name-col">${r.person_name||''}</td>
+    <td class="headline-col" title="${(r.person_headline||'').replace(/"/g,'&quot;')}">${r.person_headline||''}</td>
+    <td><span class="type-badge ${typeClass(r.engagement_type)}">${r.engagement_type||'LIKE'}</span></td>
+    <td><span class="page-badge ${pageClass(r.company_page)}">${(r.company_page||'').replace('Simplify ','')}</span></td>
+    <td class="${isEmp?'emp-yes':'emp-no'}">${isEmp?'Yes':'—'}</td>
+    <td style="font-size:12px;color:#888">${r.employee_entity||''}</td>
+    <td class="headline-col" title="${(r.post_snippet||'').replace(/"/g,'&quot;')}">${(r.post_snippet||'').substring(0,50)}</td>
+  </tr>`;
+}
+
+init();
+</script>
+</body>
+</html>
